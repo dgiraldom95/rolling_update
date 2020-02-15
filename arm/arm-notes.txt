@@ -1,0 +1,25 @@
+CREATE IMAGE
+docker build -t dgiraldom/node-test-1:working .
+docker push dgiraldom/node-test-1:working 
+
+docker build -t dgiraldom/node-test-1:failing .
+docker push dgiraldom/node-test-1:failing
+
+RUN CONTAINER
+docker run -d -p 3000:3000 dgiraldom/node-test-1:working
+docker run -d -p 3000:3000 dgiraldom/node-test-1:failing
+
+SWARM
+docker swarm init --advertise-addr 192.168.0.10
+
+docker service create \
+    --name app \
+    --replicas 5 \
+    --update-delay 20s \
+    --publish 3001:3001 \
+    dgiraldom/node-test-1:working 
+
+docker service update \
+    --update-failure-action "rollback" \
+    --image dgiraldom/node-test-1:failing \
+    app 
