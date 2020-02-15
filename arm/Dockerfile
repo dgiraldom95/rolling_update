@@ -1,6 +1,7 @@
 FROM arm64v8/alpine:3.7
 
-RUN apk add --update nodejs nodejs-npm
+RUN ["apk", "add", "nodejs"]
+RUN ["apk", "add", "nodejs-npm"]
 RUN ["apk", "add", "curl"]
 
 HEALTHCHECK --interval=3s --timeout=3s \
