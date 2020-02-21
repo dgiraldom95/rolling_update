@@ -1,0 +1,16 @@
+version: '3'
+
+services:
+  app:
+    build: './app'
+    ports: 
+      - '3000:3000'
+  monitor:
+    build: './monitor'
+    ports: 
+      - '3001:3001'
+  db:
+    image: 'mvertes/alpine-mongo'
+    ports: 
+      - '27017:27017'
+
