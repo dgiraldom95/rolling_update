@@ -1,5 +1,5 @@
 CREATE IMAGE
-docker build -t dgiraldom/node-test-1:working .
+docker build -t dgiraldom/node-test-1:working ./app
 docker push dgiraldom/node-test-1:working 
 
 docker build -t dgiraldom/node-test-1:failing .
@@ -16,7 +16,7 @@ docker service create \
     --name app \
     --replicas 5 \
     --update-delay 20s \
-    --publish 3001:3001 \
+    --publish 3000:3001 \
     dgiraldom/node-test-1:working 
 
 docker service update \

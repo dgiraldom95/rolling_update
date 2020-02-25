@@ -9,7 +9,8 @@ const dbName = 'monitoring';
 // Create a new MongoClient
 const client = new MongoClient(url);
 
-const reportCollection = 'report'
+const reportCollection = 'report';
+const versionCollection = 'version';
 
 const getDB = async () => {
     await new Promise((resolve, reject) => {
@@ -29,8 +30,7 @@ const insertDocument = async (collection, document) => {
     });
 };
 
-const getDocuments = async collection => {
-    console.log(collection);
+const getDocuments = async (collection, filters = {}) => {
     const db = await getDB();
     const collectionGet = db.collection(collection);
     return new Promise((resolve, reject) => {
@@ -40,4 +40,9 @@ const getDocuments = async collection => {
     });
 };
 
-module.exports = { getDocuments, insertDocument, reportCollection };
+const getCollection = async collection => {
+    const db = await getDB();
+    return db.collection(collection);
+};
+
+module.exports = { getDocuments, insertDocument, reportCollection, versionCollection, getCollection };

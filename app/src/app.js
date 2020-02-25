@@ -13,18 +13,45 @@ const middleware = async (req, res, callback) => {
     const iTime = new Date();
 
     callback(req, res);
-
     const latency = new Date() - iTime;
 
-    report.status = res.status !== 500 ? 'ok' : 'error';
+    report.status = res.statusCode !== 500 ? 'ok' : 'error';
     report.latency = latency;
     report.version = APP_VERSION;
-    const response = await axios.post('http://monitor:3001/reports', report);
-    console.log('report: ', response.data);
+    report.date = new Date();
+    try {
+        const response = await axios.post('http://monitor:3001/reports', report);
+        res.send(response.data);
+    } catch {
+        res.status(200).end();
+    }
+};
+
+const fib = n => {
+    if (n === 1 || n === 0) {
+        return 1;
+    } else {
+        return fib(n - 1) + fib(n - 2);
+    }
 };
 
 app.get('/', async (req, res) => {
-    await middleware(req, res, (reqP, resP) => resP.send('app'));
+    await middleware(req, res, () => {
+        const rand = Math.random();
+        const randFailThreshold = APP_VERSION < 2 ? 0.95 : 0.8;
+
+        const result = fib(20 * APP_VERSION);
+
+        if (rand > randFailThreshold) {
+            res.status(500);
+        } else {
+            res.status(200);
+        }
+    });
+});
+
+app.get('/healthcheck', (req, res) => {
+    res.status(200).end();
 });
 
 app.listen(port, () => console.log(`Example app listening on port ${port}!`));
