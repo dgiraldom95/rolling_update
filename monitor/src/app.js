@@ -79,6 +79,9 @@ app.get('/health-report/:version', async (req, res) => {
 
     const [currentVersion, prevVersion] = versionHistory;
 
+    prevVersion.errorPercentage = prevVersion.numErrors / prevVersion.numTotal;
+    currentVersion.errorPercentage = currentVersion.numErrors / prevVersion.numTotal;
+
     if (currentVersion && prevVersion) {
         if (
             (prevVersion.avgLatency - currentVersion.avgLatency) / currentVersion.avgLatency >
@@ -86,6 +89,7 @@ app.get('/health-report/:version', async (req, res) => {
             (prevVersion.errorPercentage - currentVersion.errorPercentage) / currentVersion.errorPercentage >
                 config.maxErrorRateIncrease
         ) {
+            res.status(500).send({ status: 'rollback' });
         }
     }
 
@@ -94,6 +98,10 @@ app.get('/health-report/:version', async (req, res) => {
 
 app.get('/reports', async (req, res) => {
     res.send(await db.getDocuments(db.reportCollection));
+});
+
+app.get('/healthcheck', (req, res) => {
+    res.status(200).end();
 });
 
 app.listen(port, () => console.log(`Example app listening on port ${port}!`));

@@ -10,4 +10,6 @@ COPY . .
 
 RUN npm install
 
-CMD ["npm", "run", "start"]
+HEALTHCHECK CMD curl --fail http://localhost:3001/ || exit 1
+
+CMD ["npm", "run", "start"]ƒ

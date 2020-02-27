@@ -2,11 +2,11 @@ version: '3'
 
 services:
   app:
-    build: './app'
+    image: 'dgiraldom/node-test-1:working'
     ports: 
       - '3000:3000'
   monitor:
-    build: './monitor'
+    image: 'dgiraldom/monitor'
     ports: 
       - '3001:3001'
   db:

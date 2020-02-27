@@ -5,12 +5,20 @@ docker push dgiraldom/node-test-1:working
 docker build -t dgiraldom/node-test-1:failing .
 docker push dgiraldom/node-test-1:failing
 
+docker build -t dgiraldom/node-test-1:working ./app \
+&& docker build -t dgiraldom/monitor ./monitor \
+&& docker push dgiraldom/node-test-1:working \
+&& docker push dgiraldom/monitor
+
 RUN CONTAINER
 docker run -d -p 3000:3000 dgiraldom/node-test-1:working
 docker run -d -p 3000:3000 dgiraldom/node-test-1:failing
 
 SWARM
 docker swarm init --advertise-addr 192.168.0.10
+
+STACK
+docker stack deploy --compose-file docker-compose.yml iot
 
 docker service create \
     --name app \
