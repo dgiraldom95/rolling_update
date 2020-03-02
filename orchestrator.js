@@ -12,20 +12,27 @@ const config = {
     updateDelay: '20s',
 };
 const appContainerName = 'iot_app';
+const monitorContainerName = 'iot_monitor';
+const mongoContainerName = 'iot_mongo';
 
 const dockerRequest = async (path, method, body) => {
     const options = {
         socketPath,
         path,
         method,
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
     };
 
     return new Promise((resolve, reject) => {
         const request = http.request(options, res => {
             res.setEncoding('utf8');
             res.on('error', data => reject(data));
-            res.on('data', data => resolve(JSON.parse(data)));
+            res.on('data', data => {
+                console.log(data);
+                resolve(JSON.parse(data));
+            });
         });
+
         if (body) {
             request.write(JSON.stringify(body));
         }
@@ -52,7 +59,7 @@ const getAppServiceInfo = async () => {
     return { id: appServiceId, version };
 };
 
-const createService = async () => {
+const createAppService = async () => {
     let r = await dockerRequest('/services/create', 'POST', {
         Name: appContainerName,
         TaskTemplate: {
@@ -77,8 +84,64 @@ const createService = async () => {
                 },
             ],
         },
+        Networks: [{ Target: 'iot_overlay' }],
     });
-    console.log('CREATE SERVICE: ', r);
+    console.log('CREATE APP SERVICE: ', r);
+};
+
+const createMonitorService = async () => {
+    let r = await dockerRequest('/services/create', 'POST', {
+        Name: monitorContainerName,
+        TaskTemplate: {
+            ContainerSpec: {
+                Image: 'dgiraldom/monitor',
+            },
+        },
+        Mode: {
+            Replicated: {
+                Replicas: 1,
+            },
+        },
+
+        EndpointSpec: {
+            Ports: [
+                {
+                    Protocol: 'tcp',
+                    PublishedPort: 3001,
+                    TargetPort: 3001,
+                },
+            ],
+        },
+        Networks: [{ Target: 'iot_overlay' }],
+    });
+    console.log('CREATE MONITOR SERVICE: ', r);
+};
+
+const createMongoService = async () => {
+    let r = await dockerRequest('/services/create', 'POST', {
+        Name: mongoContainerName,
+        TaskTemplate: {
+            ContainerSpec: {
+                Image: 'mvertes/alpine-mongo',
+            },
+        },
+        Mode: {
+            Replicated: {
+                Replicas: 1,
+            },
+        },
+        EndpointSpec: {
+            Ports: [
+                {
+                    Protocol: 'tcp',
+                    PublishedPort: 27017,
+                    TargetPort: 27017,
+                },
+            ],
+        },
+        Networks: [{ Target: 'iot_overlay' }],
+    });
+    console.log('CREATE DB SERVICE: ', r);
 };
 
 const updateService = async (id, version) => {
@@ -97,12 +160,27 @@ const updateService = async (id, version) => {
         UpdateConfig: {
             Delay: 1000000,
         },
+        Networks: [{ Target: 'iot_overlay' }],
     });
-    console.log(id);
     console.log('SERVICE UPDATE: ', r);
 };
 
-const stackDeploy = async () => {};
+const createOverlayNetwork = async () => {
+    let r = await dockerRequest('/networks/create', 'POST', {
+        Name: 'iot_overlay',
+        CheckDuplicate: true,
+        Driver: 'overlay',
+    });
+    console.log('OVERLAY NETWORK: ', r);
+};
+
+const stackDeploy = async () => {
+    console.log('CREATING STACK');
+    await createOverlayNetwork();
+    await createAppService();
+    await createMonitorService();
+    await createMongoService();
+};
 
 const rollback = async (id, version) => {
     let r = await dockerRequest(`/services/${id}/update?version=${version}&rollback=previous`, 'POST', {
@@ -129,6 +207,7 @@ const rollback = async (id, version) => {
                 },
             ],
         },
+        Networks: [{ Target: 'iot_overlay' }],
     });
     console.log('SERVICE ROLLBACK: ', r);
 };
@@ -159,7 +238,7 @@ const main = async () => {
                     await joinSwarm();
                     break;
                 case 3:
-                    await createService();
+                    await stackDeploy();
                     break;
                 case 4:
                     let { id, version } = await getAppServiceInfo();
