@@ -1,7 +1,7 @@
 MongoClient = require('mongodb').MongoClient;
 
 // Connection URL
-const url = 'mongodb://db:27017';
+const url = 'mongodb://iot_mongo:27017';
 
 // Database Name
 const dbName = 'monitoring';
@@ -11,6 +11,7 @@ const client = new MongoClient(url);
 
 const reportCollection = 'report';
 const versionCollection = 'version';
+const resourcesCollection = 'resources';
 
 const getDB = async () => {
     await new Promise((resolve, reject) => {
@@ -25,6 +26,19 @@ const insertDocument = async (collection, document) => {
     const collectionInsert = db.collection(collection);
     return new Promise((resolve, reject) => {
         collectionInsert.insertOne(document, function(err, result) {
+            resolve(result);
+        });
+    });
+};
+
+const insertDocuments = async (collection, documents) => {
+    const db = await getDB();
+    const collectionInsert = db.collection(collection);
+    return new Promise((resolve, reject) => {
+        collectionInsert.insertMany(documents, (err, result) => {
+            if (err) {
+                console.log(err);
+            }
             resolve(result);
         });
     });
@@ -45,4 +59,12 @@ const getCollection = async collection => {
     return db.collection(collection);
 };
 
-module.exports = { getDocuments, insertDocument, reportCollection, versionCollection, getCollection };
+module.exports = {
+    getDocuments,
+    insertDocument,
+    reportCollection,
+    versionCollection,
+    getCollection,
+    resourcesCollection,
+    insertDocuments,
+};

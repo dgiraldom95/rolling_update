@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "start": "node src/app.js"
+    "start": "node src/monitor.js"
   },
   "dependencies": {
     "@types/mongodb": "^3.3.16",

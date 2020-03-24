@@ -2,17 +2,25 @@ CREATE IMAGE
 docker build -t dgiraldom/node-test-1:working ./app
 docker push dgiraldom/node-test-1:working 
 
-docker build -t dgiraldom/node-test-1:failing .
-docker push dgiraldom/node-test-1:failing
+docker build -t dgiraldom/node-test-1:failing ./app \
+&& docker push dgiraldom/node-test-1:failing
 
+BUILD WORKING AND MONITOR
 docker build -t dgiraldom/node-test-1:working ./app \
 && docker build -t dgiraldom/monitor ./monitor \
+&& docker build -t dgiraldom/resources ./resources \
 && docker push dgiraldom/node-test-1:working \
-&& docker push dgiraldom/monitor
+&& docker push dgiraldom/monitor \
+&& docker push dgiraldom/resources
+
+BUILD RESOURCES
+docker build -t dgiraldom/resources ./resources
+&& docker push dgiraldom/resources
 
 RUN CONTAINER
 docker run -d -p 3000:3000 dgiraldom/node-test-1:working
 docker run -d -p 3000:3000 dgiraldom/node-test-1:failing
+docker run -it -v /var/run/docker.sock:/var/run/docker.sock dgiraldom/resources
 
 SWARM
 docker swarm init --advertise-addr 192.168.0.10
@@ -31,3 +39,8 @@ docker service update \
     --update-failure-action "rollback" \
     --image dgiraldom/node-test-1:failing \
     app 
+
+docker service create \
+--mode global \
+--mount type=bind,source=/var/run/docker.sock,destination=/var/run/docker.sock \
+--network iot_overlay dgiraldom/resources

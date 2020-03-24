@@ -20,7 +20,7 @@ const middleware = async (req, res, callback) => {
     report.version = APP_VERSION;
     report.date = new Date();
     try {
-        const response = await axios.post('http://monitor:3001/reports', report);
+        const response = await axios.post('http://iot_monitor:3001/reports', report);
         res.send(response.data);
     } catch {
         res.status(200).end();

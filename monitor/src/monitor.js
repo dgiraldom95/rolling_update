@@ -8,7 +8,7 @@ app.use(bodyParser.json());
 const config = {
     maxLatencyIncrease: 1.2,
     maxErrorRateIncrease: 1.2,
-    minReports: 50,
+    minReports: 10,
 };
 
 const port = 3001;
@@ -18,6 +18,12 @@ app.get('/', (req, res) => res.send('Hello World!'));
 app.post('/reports', async (req, res) => {
     const newReport = await db.insertDocument(db.reportCollection, req.body);
     res.send(newReport);
+});
+
+app.post('/resources', async (req, res) => {
+    const newResources = await db.insertDocuments(db.resourcesCollection, req.body);
+    // console.log('Received resources report: ', req.body);
+    res.send(newResources);
 });
 
 app.post('/version', async (req, res) => {
@@ -64,10 +70,7 @@ app.get('/health-report/:version', async (req, res) => {
             {
                 $addFields: {
                     errorPercentage: {
-                        $divide: [
-                            { $sum: { $cond: { if: { $eq: ['$status', 'error'] }, then: 1, else: 0 } } },
-                            { $sum: 1 },
-                        ],
+                        $divide: ['$numErrors', '$numTotal'],
                     },
                 },
             },
@@ -79,18 +82,21 @@ app.get('/health-report/:version', async (req, res) => {
 
     const [currentVersion, prevVersion] = versionHistory;
 
-    prevVersion.errorPercentage = prevVersion.numErrors / prevVersion.numTotal;
-    currentVersion.errorPercentage = currentVersion.numErrors / prevVersion.numTotal;
-
     if (currentVersion && prevVersion) {
-        if (
-            (prevVersion.avgLatency - currentVersion.avgLatency) / currentVersion.avgLatency >
-                config.maxLatencyIncrease ||
-            (prevVersion.errorPercentage - currentVersion.errorPercentage) / currentVersion.errorPercentage >
-                config.maxErrorRateIncrease
-        ) {
-            res.status(500).send({ status: 'rollback' });
+        latencyIncrease = (currentVersion.avgLatency - prevVersion.avgLatency) / prevVersion.avgLatency;
+
+        errorPercentageIncrease =
+            (currentVersion.errorPercentage - prevVersion.errorPercentage) / prevVersion.errorPercentage;
+
+        const report = { latencyIncrease, errorPercentageIncrease };
+
+        if (latencyIncrease > config.maxLatencyIncrease || errorPercentageIncrease > config.maxErrorRateIncrease) {
+            res.status(200).send({ ...report, status: 'rollback' });
+        } else {
+            res.status(200).send({ ...report, status: 'ok' });
         }
+    } else {
+        res.status(200).send({ status: 'not enough data' });
     }
 
     res.send(versionHistory);
