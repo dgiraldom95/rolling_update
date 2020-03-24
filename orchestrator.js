@@ -1,24 +1,22 @@
 const http = require('http');
 const readline = require('readline');
+const execCommand = require('child_process').exec;
 
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
 });
 
-const socketPath = '/var/run/docker.sock';
-
-const appContainerName = 'iot_app';
-const monitorContainerName = 'iot_monitor';
-const resourceContainerName = 'iot_resources';
-const mongoContainerName = 'iot_mongo';
+const appServiceName = 'iot_app';
+const monitorServiceName = 'iot_monitor';
+const resourceServiceName = 'iot_resources';
+const mongoServiceName = 'iot_mongo';
 
 let latestAppVersion = 2;
-const updateInterval = 1000000000000000000;
 
 const exec = async command => {
     return new Promise((resolve, reject) => {
-        exec(command, function(error, stdout, stderr) {
+        execCommand(command, function(error, stdout, stderr) {
             if (stderr) {
                 console.log('COMMAND ERR: ', stderr);
                 reject(stderr);
@@ -28,216 +26,90 @@ const exec = async command => {
     });
 };
 
-const dockerRequest = async (path, method, body) => {
-    const options = {
-        socketPath,
-        path,
-        method,
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    };
-
-    return new Promise((resolve, reject) => {
-        const request = http.request(options, res => {
-            res.setEncoding('utf8');
-            res.on('error', data => reject(data));
-            res.on('data', data => {
-                console.log(data);
-                resolve(JSON.parse(data));
-            });
-        });
-
-        if (body) {
-            request.write(JSON.stringify(body));
-        }
-        request.end();
-    });
-};
-
-const getAppContainerSpec = image => ({
-    Name: appContainerName,
-    TaskTemplate: {
-        ContainerSpec: {
-            Image: image,
-        },
-    },
-    Mode: {
-        Replicated: {
-            Replicas: 5,
-        },
-    },
-    UpdateConfig: {
-        Parallelism: 1,
-        Delay: 100,
-        FailureAction: 'pause',
-        Monitor: 15000000000,
-        MaxFailureRatio: 0.15,
-    },
-    RollbackConfig: {
-        Parallelism: 1,
-        Delay: updateInterval,
-    },
-    EndpointSpec: {
-        Ports: [
-            {
-                Protocol: 'tcp',
-                PublishedPort: 3000,
-                TargetPort: 3000,
-            },
-        ],
-    },
-    Networks: [{ Target: 'iot_overlay' }],
-});
-
 const leaveSwarm = async () => {
-    let r = await dockerRequest('/swarm/leave?force=true', 'POST');
+    let r = await exec('docker swarm leave -f');
     console.log('LEAVE SWARM: ', r);
 };
 
 const joinSwarm = async () => {
-    let r = await dockerRequest('/swarm/init', 'POST', { ListenAddr: '0.0.0.0:2377' });
+    let r = await exec('docker swarm init');
     console.log('JOIN SWARM: ', r);
 };
 
-const getAppServiceInfo = async () => {
-    const services = await dockerRequest('/services', 'GET');
-    const appServiceId = services.find(s => s.Spec.Name === appContainerName).ID;
-    const appService = await dockerRequest(`/services/${appServiceId}`, 'GET');
-    const version = appService.Version.Index;
-
-    return { id: appServiceId, version };
-};
-
 const createAppService = async () => {
-    let r = await dockerRequest('/services/create', 'POST', getAppContainerSpec('dgiraldom/node-test-1:working'));
+    let r = await exec(`docker service create \
+    --detach \
+    --name ${appServiceName} \
+    --replicas 5 \
+    --update-delay 1s \
+    --rollback-delay 1s \
+    --update-failure-action "rollback" \
+    --publish 3000:3000 \
+    --network iot_overlay \
+    dgiraldom/node-test-1:working`);
     console.log('CREATE APP SERVICE: ', r);
 };
 
 const createResourceReportingService = async () => {
-    await exec(`docker service create \
+    let r = await exec(`docker service create \
+    --detach \
+    --name ${resourceServiceName} \
     --mode global \
     --mount type=bind,source=/var/run/docker.sock,destination=/var/run/docker.sock \
-    --network iot_overlay dgiraldom/resources`);
-    //     let r = await dockerRequest('/services/create', 'POST', {
-    //         Name: resourceContainerName,
-    //         TaskTemplate: {
-    //             ContainerSpec: {
-    //                 Image: 'dgiraldom/resources',
-    //             },
-    //             Mounts: [
-    //                 {
-    //                     Source: '/var/run/docker.sock',
-    //                     Target: '/var/run/docker.sock',
-    //                     Type: 'bind',
-    //                 },
-    //             ],
-    //         },
-    //         // Mode: 'global',
-    //         Mode: {
-    //             Replicated: {
-    //                 Replicas: 1,
-    //             },
-    //         },
-    //         EndpointSpec: {
-    //             Ports: [
-    //                 {
-    //                     Protocol: 'tcp',
-    //                     PublishedPort: 3002,
-    //                     TargetPort: 3002,
-    //                 },
-    //             ],
-    //         },
-    //         Networks: [{ Target: 'iot_overlay' }],
-    //     });
-    //     console.log('CREATE RESOURCE SERVICE: ', r);
-    // };
+    --network iot_overlay \
+    dgiraldom/resources`);
+    console.log('CREATE RESOURCE SERVICE: ', r);
+};
 
-    // const createMonitorService = async () => {
-    //     let r = await dockerRequest('/services/create', 'POST', {
-    //         Name: monitorContainerName,
-    //         TaskTemplate: {
-    //             ContainerSpec: {
-    //                 Image: 'dgiraldom/monitor',
-    //             },
-    //         },
-    //         Mode: {
-    //             Replicated: {
-    //                 Replicas: 1,
-    //             },
-    //         },
-    //         EndpointSpec: {
-    //             Ports: [
-    //                 {
-    //                     Protocol: 'tcp',
-    //                     PublishedPort: 3001,
-    //                     TargetPort: 3001,
-    //                 },
-    //             ],
-    //         },
-    //         Networks: [{ Target: 'iot_overlay' }],
-    //     });
-    //     console.log('CREATE MONITOR SERVICE: ', r);
+const createMonitorService = async () => {
+    let r = await exec(`docker service create \
+    --detach \
+    --name ${monitorServiceName} \
+    --replicas 1 \
+    --publish 3001:3001 \
+    --network iot_overlay \
+    dgiraldom/monitor`);
+
+    console.log('CREATE MONITOR SERVICE: ', r);
 };
 
 const createMongoService = async () => {
-    let r = await dockerRequest('/services/create', 'POST', {
-        Name: mongoContainerName,
-        TaskTemplate: {
-            ContainerSpec: {
-                Image: 'mvertes/alpine-mongo',
-            },
-        },
-        Mode: {
-            Replicated: {
-                Replicas: 1,
-            },
-        },
-        EndpointSpec: {
-            Ports: [
-                {
-                    Protocol: 'tcp',
-                    PublishedPort: 27017,
-                    TargetPort: 27017,
-                },
-            ],
-        },
-        Networks: [{ Target: 'iot_overlay' }],
-    });
+    let r = await exec(`docker service create \
+    --detach \
+    --name ${mongoServiceName} \
+    --replicas 1 \
+    --publish 27017:27017 \
+    --network iot_overlay \
+    mvertes/alpine-mongo`);
+
     console.log('CREATE DB SERVICE: ', r);
 };
 
-const updateService = async (id, version) => {
-    let r = await dockerRequest(
-        `/services/${id}/update?version=${version}`,
-        'POST',
-        getAppContainerSpec('dgiraldom/node-test-1:failing'),
-    );
+const updateService = async () => {
+    let r = await exec(`docker service update \
+    --detach \
+    --update-failure-action "rollback" \
+    --image dgiraldom/node-test-1:failing \
+    ${appServiceName}`);
     console.log('SERVICE UPDATE: ', r);
 };
 
 const createOverlayNetwork = async () => {
-    let r = await dockerRequest('/networks/create', 'POST', {
-        Name: 'iot_overlay',
-        CheckDuplicate: true,
-        Driver: 'overlay',
-    });
+    let r = await exec(`docker network create --driver overlay iot_overlay`);
     console.log('OVERLAY NETWORK: ', r);
 };
 
 const stackDeploy = async () => {
     console.log('CREATING STACK');
     await createOverlayNetwork();
+    await createMongoService();
     await createAppService();
     await createMonitorService();
-    await createMongoService();
     await createResourceReportingService();
 };
 
-const sendRollbackRequest = async (id, version) => {
-    let r = await dockerRequest(
-        `/services/${id}/update?version=${version}&rollback=previous`,
-        'POST',
-        getAppContainerSpec('dgiraldom/node-test-1:working'),
-    );
+const sendRollbackRequest = async () => {
+    let r = await exec(`docker service rollback --detach ${appServiceName}`);
     console.log('SERVICE ROLLBACK: ', r);
 };
 
@@ -296,12 +168,10 @@ const main = async () => {
                     await stackDeploy();
                     break;
                 case 4:
-                    ({ id, version } = await getAppServiceInfo());
                     latestAppVersion += 1;
-                    await updateService(id, version);
+                    await updateService();
                     break;
                 case 5:
-                    ({ id, version } = await getAppServiceInfo());
                     await checkRollbackStatus(id, version);
                     break;
             }
