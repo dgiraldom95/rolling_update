@@ -8,10 +8,14 @@ app.use(bodyParser.json());
 const config = {
     maxLatencyIncrease: 1.2,
     maxErrorRateIncrease: 1.2,
+    maxRamIncrease: 1.2,
+    maxCPUIncrease: 1.2,
+    maxNetIOIncrease: 1.2,
     minReports: 10,
+    minResourcesReports: 10,
 };
 
-const port = 3001;
+const port = 3011;
 
 app.get('/', (req, res) => res.send('Hello World!'));
 
@@ -52,54 +56,101 @@ app.get('/version', async (req, res) => {
 });
 
 app.get('/health-report/:version', async (req, res) => {
-    const version = req.params.version;
+    const version = Number(req.params.version);
 
-    const reports = await db.getCollection(db.reportCollection);
-    const versionHistory = await reports
-        .aggregate([
-            {
-                $group: {
-                    _id: { version: '$version' },
-                    version: { $min: '$version' },
-                    firstReportDate: { $min: '$date' },
-                    avgLatency: { $avg: '$latency' },
-                    numTotal: { $sum: 1 },
-                    numErrors: { $sum: { $cond: { if: { $eq: ['$status', 'error'] }, then: 1, else: 0 } } },
-                },
-            },
-            {
-                $addFields: {
-                    errorPercentage: {
-                        $divide: ['$numErrors', '$numTotal'],
+    const getQOSMetrics = async version => {
+        const reports = await db.getCollection(db.reportCollection);
+        return reports
+            .aggregate([
+                {
+                    $group: {
+                        _id: { $toInt: '$version' },
+                        firstReportDate: { $min: '$date' },
+                        avgLatency: { $avg: '$latency' },
+                        count: { $sum: 1 },
+                        numErrors: { $sum: { $cond: { if: { $eq: ['$status', 'error'] }, then: 1, else: 0 } } },
                     },
                 },
-            },
-            { $match: { $and: [{ numTotal: { $gte: config.minReports } }, { version: { $lte: Number(version) } }] } },
-            { $sort: { version: -1 } },
-            { $limit: 2 },
-        ])
-        .toArray();
+                {
+                    $addFields: {
+                        errorPercentage: {
+                            $divide: ['$numErrors', '$count'],
+                        },
+                    },
+                },
+                { $match: { _id: { $lte: version } } },
+                { $sort: { version: -1 } },
+                { $limit: 2 },
+            ])
+            .toArray();
+    };
 
-    const [currentVersion, prevVersion] = versionHistory;
+    const getResources = async version => {
+        const resources = await db.getCollection(db.resourcesCollection);
+        return resources
+            .aggregate([
+                { $match: { image: /iot_edge/ } },
+                {
+                    $group: {
+                        _id: { $toInt: '$version' },
+                        ram: { $avg: '$ram' },
+                        cpu: { $avg: '$cpu' },
+                        netIO: { $avg: '$netIO' },
+                        count: { $sum: 1 },
+                    },
+                },
+                { $match: { _id: { $lte: version } } },
+                { $sort: { _id: -1 } },
+                { $limit: 2 },
+            ])
+            .toArray();
+    };
 
-    if (currentVersion && prevVersion) {
-        latencyIncrease = (currentVersion.avgLatency - prevVersion.avgLatency) / prevVersion.avgLatency;
+    const [qos, resources] = await Promise.all([getQOSMetrics(version), getResources(version)]);
 
-        errorPercentageIncrease =
-            (currentVersion.errorPercentage - prevVersion.errorPercentage) / prevVersion.errorPercentage;
+    const [cvq, pvq] = qos;
+    const [cvr, pvr] = resources;
 
-        const report = { latencyIncrease, errorPercentageIncrease };
+    console.log(' QOS: ', qos);
+    console.log(' RESOURCES: ', resources);
 
-        if (latencyIncrease > config.maxLatencyIncrease || errorPercentageIncrease > config.maxErrorRateIncrease) {
-            res.status(200).send({ ...report, status: 'rollback' });
-        } else {
-            res.status(200).send({ ...report, status: 'ok' });
-        }
-    } else {
-        res.status(200).send({ status: 'not enough data' });
+    if (!(cvq && pvq && cvr && pvr)) {
+        res.status(200).send({ status: 'notEnoughData' });
     }
 
-    res.send(versionHistory);
+    const latencyIncrease = (cvq.avgLatency - pvq.avgLatency) / pvq.avgLatency;
+    const errorPercentageIncrease = (cvq.errorPercentage - pvq.errorPercentage) / pvq.errorPercentage;
+    const ramIncrease = (cvr.ram - pvr.ram) / pvr.ram;
+    const cpuIncrease = (cvr.cpu - pvr.cpu) / pvr.cpu;
+    const netIOIncrease = (cvr.netIO - pvr.netIO) / pvr.netIO;
+
+    const currResourcesCount = cvr.count;
+    const prevResourcesCount = pvr.count;
+    const currReportsCount = cvq.count;
+    const prevReportsCount = pvq.count;
+
+    const report = { latencyIncrease, errorPercentageIncrease, ramIncrease, cpuIncrease, netIOIncrease };
+
+    if (
+        currResourcesCount < minResourcesReports ||
+        prevResourcesCount < minResourcesReports ||
+        currReportsCount < minReports ||
+        prevReportsCount < minReports
+    ) {
+        res.status(200).send({ ...report, status: 'notEnoughData' });
+    }
+
+    if (
+        latencyIncrease > config.maxLatencyIncrease ||
+        errorPercentageIncrease > config.maxErrorRateIncrease ||
+        ramIncrease > config.maxRamIncrease ||
+        cpuIncrease > config.maxCPUIncrease ||
+        netIOIncrease > config.maxNetIOIncrease
+    ) {
+        res.status(200).send({ ...report, status: 'rollback' });
+    }
+
+    res.status(200).send({ ...report, status: 'ok' });
 });
 
 app.get('/reports', async (req, res) => {

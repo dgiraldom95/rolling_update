@@ -7,12 +7,51 @@
         {
             "type": "node",
             "request": "launch",
-            "name": "Launch Program",
+            "name": "Orchestrator",
             "console": "integratedTerminal",
             "skipFiles": [
                 "<node_internals>/**"
             ],
             "program": "${workspaceFolder}/orchestrator.js"
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Monitor",
+            "console": "integratedTerminal",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "env": {
+                "MONGO_HOST": "localhost"
+            },
+            "program": "${workspaceFolder}/monitor/src/monitor.js"
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Resources",
+            "console": "integratedTerminal",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "env": {
+                "MONITOR_HOST": "localhost"
+            },
+            "program": "${workspaceFolder}/resources/src/resources.js"
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Thing",
+            "console": "integratedTerminal",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "env": {
+                "APP_HOST": "localhost"
+            },
+            "program": "${workspaceFolder}/thing/src/thing.js"
         }
     ]
 }

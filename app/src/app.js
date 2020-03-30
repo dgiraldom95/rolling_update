@@ -6,7 +6,7 @@ const app = express();
 app.use(bodyParser.json());
 const port = 3000;
 
-const APP_VERSION = 1;
+const APP_VERSION = process.env.APP_VERSION;
 
 const middleware = async (req, res, callback) => {
     const report = {};

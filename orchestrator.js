@@ -11,8 +11,12 @@ const appServiceName = 'iot_app';
 const monitorServiceName = 'iot_monitor';
 const resourceServiceName = 'iot_resources';
 const mongoServiceName = 'iot_mongo';
+const thingServiceName = 'iot_thing';
 
 let latestAppVersion = 2;
+
+const workingImage = '1';
+const failingImage = '2';
 
 const exec = async command => {
     return new Promise((resolve, reject) => {
@@ -46,7 +50,8 @@ const createAppService = async () => {
     --update-failure-action "rollback" \
     --publish 3000:3000 \
     --network iot_overlay \
-    dgiraldom/node-test-1:working`);
+    --env APP_VERSION=${workingImage} \
+    dgiraldom/iot_edge:${workingImage}`);
     console.log('CREATE APP SERVICE: ', r);
 };
 
@@ -85,11 +90,24 @@ const createMongoService = async () => {
     console.log('CREATE DB SERVICE: ', r);
 };
 
+const createThingService = async () => {
+    let r = await exec(`docker service create \
+        --detach \
+        --name ${thingServiceName} \
+        --replicas 1 \
+        --publish 3003:3003 \
+        --network iot_overlay \
+        dgiraldom/thing`);
+
+    console.log('CREATE THING SERVICE: ', r);
+};
+
 const updateService = async () => {
     let r = await exec(`docker service update \
     --detach \
     --update-failure-action "rollback" \
-    --image dgiraldom/node-test-1:failing \
+    --image dgiraldom/iot_edge:${failingImage} \
+    --env-add APP_VERSION=${failingImage} \
     ${appServiceName}`);
     console.log('SERVICE UPDATE: ', r);
 };
@@ -102,10 +120,13 @@ const createOverlayNetwork = async () => {
 const stackDeploy = async () => {
     console.log('CREATING STACK');
     await createOverlayNetwork();
-    await createMongoService();
-    await createAppService();
-    await createMonitorService();
-    await createResourceReportingService();
+    await Promise.all([
+        createMongoService(),
+        createAppService(),
+        createMonitorService(),
+        createResourceReportingService(),
+        createThingService(),
+    ]);
 };
 
 const sendRollbackRequest = async () => {
@@ -117,25 +138,24 @@ const checkRollbackStatus = async (id, version) => {
     options = {
         host: 'localhost',
         port: 3001,
-        path: `/health-report/${latestAppVersion}`,
+        path: `/health-report/2`,
         method: 'GET',
     };
 
-    sendRollbackRequest(id, version);
-
-    // const req = http.request(options, res => {
-    //     res.setEncoding('utf8');
-    //     res.on('data', d => {
-    //         const result = JSON.parse(d);
-    //         console.warn('VERSION STATUS: ', result.status);
-    //         console.log(result);
-    //         if (result.status === 'rollback') {
-    //             console.error('PERFORMING ROLLBACK');
-    //             sendRollbackRequest(id, version);
-    //         }
-    //     });
-    // });
-    // req.end();
+    const req = http.request(options, res => {
+        res.setEncoding('utf8');
+        res.on('data', d => {
+            const result = JSON.parse(d);
+            console.warn('VERSION STATUS: ', result.status);
+            console.log(result);
+            if (result.status === 'rollback') {
+                console.error('PERFORMING ROLLBACK');
+                sendRollbackRequest(id, version);
+            }
+        });
+    });
+    req.end();
+    // sendRollbackRequest(id, version);
 };
 
 const main = async () => {

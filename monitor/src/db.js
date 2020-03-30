@@ -1,7 +1,8 @@
 MongoClient = require('mongodb').MongoClient;
 
+const mongoHost = process.env.MONGO_HOST
 // Connection URL
-const url = 'mongodb://iot_mongo:27017';
+const url = `ﬁmongodb://${mongoHost}:27017`;
 
 // Database Name
 const dbName = 'monitoring';

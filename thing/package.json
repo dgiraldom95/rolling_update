@@ -1,7 +1,7 @@
 {
   "scripts": {
-    "start": "node src/resources.js",
-    "start:local": "export MONITOR_HOST=localhost && node src/resources.js"
+    "start": "node src/thing.js",
+    "start:local": "export APP_HOST=localhost && node src/thing.js"
   },
   "dependencies": {
     "axios": "^0.19.2",

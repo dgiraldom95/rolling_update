@@ -4,6 +4,7 @@ const axios = require('axios');
 
 const app = express();
 const port = 3002;
+const monitorHost = process.env.MONITOR_HOST;
 
 app.get('/healthcheck', (req, res) => {
     res.status(200).end();
@@ -18,34 +19,66 @@ function execute(command, callback) {
     });
 }
 
-const reportResources = () => {
+const reportResources = async () => {
     console.log('Reporting');
-    execute(
-        `docker stats --no-stream --format "{{.Name}},{{.Container}},{{.CPUPerc}},{{.MemUsage}},{{.NetIO}}\n"`,
-        async out => {
-            data = out.split('\n');
-            const regex = '[0-9.]+';
-            const report = data
-                .filter(d => d.length > 0)
-                .map(d => {
-                    fields = d.split(',');
 
-                    return {
-                        name: fields[0],
-                        container: fields[1],
-                        cpu: Number.parseFloat(fields[2].replace('%', '')),
-                        ram: Number.parseFloat(fields[3].split('/')[0].match(regex)),
-                        netIO: Number.parseFloat(fields[4].split('/')[0].match(regex)),
-                    };
-                });
-            try {
-                const monitorResponse = await axios.post('http://iot_monitor:3001/resources', report);
-                console.log('Monitor: ', monitorResponse.body);
-            } catch (err) {
-                console.log(err.response);
-            }
-        },
-    );
+    const getResources = async () => {
+        return new Promise((resolve, reject) => {
+            execute(
+                `docker stats --no-stream --format "{{.Name}},{{.Container}},{{.CPUPerc}},{{.MemUsage}},{{.NetIO}}\n"`,
+                out => {
+                    data = out.split('\n');
+                    const regex = '[0-9.]+';
+                    const report = data
+                        .filter(d => d.length > 0)
+                        .map(d => {
+                            fields = d.split(',');
+
+                            return {
+                                name: fields[0],
+                                container: fields[1],
+                                cpu: Number.parseFloat(fields[2].replace('%', '')),
+                                ram: Number.parseFloat(fields[3].split('/')[0].match(regex)),
+                                netIO: Number.parseFloat(fields[4].split('/')[0].match(regex)),
+                                time: new Date(),
+                            };
+                        });
+
+                    resolve(report);
+                },
+            );
+        });
+    };
+
+    const getImages = async () => {
+        return new Promise((resolve, reject) => {
+            execute(`docker container ls --format='{{.ID}}, {{.Image}}\n'`, out => {
+                const data = out.split('\n');
+                const report = data
+                    .filter(d => d.length > 0)
+                    .map(d => {
+                        fields = d.split(',');
+                        return { container: fields[0], image: fields[1] };
+                    });
+                resolve(report);
+            });
+        });
+    };
+    let [resources, images] = await Promise.all([getResources(), getImages()]);
+
+    resources = resources.map(r => {
+        const image = images.find(i => i.container === r.container).image;
+        const version = image.split(':')[1];
+        return { ...r, image, version };
+    });
+
+    console.log(monitorHost);
+
+    try {
+        const monitorResponse = await axios.post(`http://${monitorHost}:3001/resources`, resources);
+    } catch (err) {
+        console.log(err.message);
+    }
 };
 
 setInterval(reportResources, 10000);
