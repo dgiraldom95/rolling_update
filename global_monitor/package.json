@@ -1,0 +1,12 @@
+{
+  "scripts": {
+    "start": "node src/monitor.js",
+    "start:local": "export MONGO_HOST=localhost && node src/monitor.js"
+  },
+  "dependencies": {
+    "@types/mongodb": "^3.3.16",
+    "body-parser": "^1.19.0",
+    "express": "^4.17.1",
+    "mongodb": "^3.5.3"
+  }
+}

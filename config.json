@@ -1,0 +1,9 @@
+{
+    "maxLatencyIncrease": 1.2,
+    "maxErrorRateIncrease": 1.2,
+    "maxRamIncrease": 1.2,
+    "maxCPUIncrease": 1.2,
+    "maxNetIOIncrease": 1.2,
+    "minReports": 10,
+    "minResourcesReports": 10
+}
