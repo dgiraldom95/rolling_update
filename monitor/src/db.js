@@ -1,6 +1,7 @@
-MongoClient = require('mongodb').MongoClient;
+const MongoClient = require('mongodb').MongoClient;
+const process = require('process');
 
-const mongoHost = process.env.MONGO_HOST
+const mongoHost = process.env.MONGO_HOST;
 // Connection URL
 const url = `ﬁmongodb://${mongoHost}:27017`;
 
@@ -26,7 +27,7 @@ const insertDocument = async (collection, document) => {
     const db = await getDB();
     const collectionInsert = db.collection(collection);
     return new Promise((resolve, reject) => {
-        collectionInsert.insertOne(document, function(err, result) {
+        collectionInsert.insertOne(document, function (err, result) {
             resolve(result);
         });
     });
@@ -49,13 +50,13 @@ const getDocuments = async (collection, filters = {}) => {
     const db = await getDB();
     const collectionGet = db.collection(collection);
     return new Promise((resolve, reject) => {
-        collectionGet.find({}).toArray(function(err, docs) {
+        collectionGet.find({}).toArray(function (err, docs) {
             resolve(docs);
         });
     });
 };
 
-const getCollection = async collection => {
+const getCollection = async (collection) => {
     const db = await getDB();
     return db.collection(collection);
 };

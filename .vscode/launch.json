@@ -9,9 +9,7 @@
             "request": "launch",
             "name": "Orchestrator",
             "console": "integratedTerminal",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/orchestrator.js"
         },
         {
@@ -19,9 +17,7 @@
             "request": "launch",
             "name": "Monitor",
             "console": "integratedTerminal",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "env": {
                 "MONGO_HOST": "localhost"
             },
@@ -32,9 +28,7 @@
             "request": "launch",
             "name": "Resources",
             "console": "integratedTerminal",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "env": {
                 "MONITOR_HOST": "localhost"
             },
@@ -45,13 +39,19 @@
             "request": "launch",
             "name": "Thing",
             "console": "integratedTerminal",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "env": {
                 "APP_HOST": "localhost"
             },
             "program": "${workspaceFolder}/thing/src/thing.js"
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Global",
+            "console": "integratedTerminal",
+            "skipFiles": ["<node_internals>/**"],
+            "program": "${workspaceFolder}/global_monitor/src/global_monitor.js"
         }
     ]
 }

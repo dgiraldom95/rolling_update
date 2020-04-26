@@ -1,7 +1,7 @@
 {
   "scripts": {
-    "start": "node src/monitor.js",
-    "start:local": "export MONGO_HOST=localhost && node src/monitor.js"
+    "start": "node src/global_monitor.js",
+    "start:local": "export MONGO_HOST=localhost && node src/global_monitor.js"
   },
   "dependencies": {
     "@types/mongodb": "^3.3.16",

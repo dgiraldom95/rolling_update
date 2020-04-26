@@ -1,19 +1,14 @@
 const express = require('express');
 const db = require('./db');
 const bodyParser = require('body-parser');
+const axios = require('axios');
+const process = require('process');
 
 const app = express();
 app.use(bodyParser.json());
 
-const config = {
-    maxLatencyIncrease: 1.2,
-    maxErrorRateIncrease: 1.2,
-    maxRamIncrease: 1.2,
-    maxCPUIncrease: 1.2,
-    maxNetIOIncrease: 1.2,
-    minReports: 10,
-    minResourcesReports: 10,
-};
+const apiKey = process.env.apiKey;
+
 
 const port = 3011;
 
@@ -26,139 +21,83 @@ app.post('/reports', async (req, res) => {
 
 app.post('/resources', async (req, res) => {
     const newResources = await db.insertDocuments(db.resourcesCollection, req.body);
-    // console.log('Received resources report: ', req.body);
     res.send(newResources);
 });
 
-app.post('/version', async (req, res) => {
-    const newReport = await db.insertDocument(db.versionCollection, req.body);
-    res.send(newReport);
-});
-
-app.get('/version', async (req, res) => {
+const aggregateQOS = async () => {
     const reports = await db.getCollection(db.reportCollection);
-
-    const versions = await reports
+    return reports
         .aggregate([
             {
                 $group: {
-                    _id: { version: '$version' },
+                    _id: { $toInt: '$version' },
                     firstReportDate: { $min: '$date' },
                     avgLatency: { $avg: '$latency' },
-                    numTotal: { $sum: 1 },
-                    numErrors: { $sum: { $cond: { if: { $eq: ['$status', 'err'] }, then: 1, else: 0 } } },
+                    count: { $sum: 1 },
+                    numErrors: { $sum: { $cond: { if: { $eq: ['$status', 'error'] }, then: 1, else: 0 } } },
                 },
+            },
+            {
+                $addFields: { version: { $min: '$_id' } },
             },
         ])
         .toArray();
-    const reponseObj = versions.map(v => ({ appVersion: v._id.version, deployDate: v.firstReportDate }));
-    res.send({ reponseObj, versions });
-});
+};
 
-app.get('/health-report/:version', async (req, res) => {
-    const version = Number(req.params.version);
-
-    const getQOSMetrics = async version => {
-        const reports = await db.getCollection(db.reportCollection);
-        return reports
-            .aggregate([
-                {
-                    $group: {
-                        _id: { $toInt: '$version' },
-                        firstReportDate: { $min: '$date' },
-                        avgLatency: { $avg: '$latency' },
-                        count: { $sum: 1 },
-                        numErrors: { $sum: { $cond: { if: { $eq: ['$status', 'error'] }, then: 1, else: 0 } } },
-                    },
+const aggregateResources = async () => {
+    const resources = await db.getCollection(db.resourcesCollection);
+    return resources
+        .aggregate([
+            { $match: { image: /iot_edge/ } },
+            {
+                $group: {
+                    _id: { $toInt: '$version' },
+                    ram: { $avg: '$ram' },
+                    cpu: { $avg: '$cpu' },
+                    netIO: { $avg: '$netIO' },
+                    count: { $sum: 1 },
                 },
-                {
-                    $addFields: {
-                        errorPercentage: {
-                            $divide: ['$numErrors', '$count'],
-                        },
-                    },
-                },
-                { $match: { _id: { $lte: version } } },
-                { $sort: { version: -1 } },
-                { $limit: 2 },
-            ])
-            .toArray();
-    };
-
-    const getResources = async version => {
-        const resources = await db.getCollection(db.resourcesCollection);
-        return resources
-            .aggregate([
-                { $match: { image: /iot_edge/ } },
-                {
-                    $group: {
-                        _id: { $toInt: '$version' },
-                        ram: { $avg: '$ram' },
-                        cpu: { $avg: '$cpu' },
-                        netIO: { $avg: '$netIO' },
-                        count: { $sum: 1 },
-                    },
-                },
-                { $match: { _id: { $lte: version } } },
-                { $sort: { _id: -1 } },
-                { $limit: 2 },
-            ])
-            .toArray();
-    };
-
-    const [qos, resources] = await Promise.all([getQOSMetrics(version), getResources(version)]);
-
-    const [cvq, pvq] = qos;
-    const [cvr, pvr] = resources;
-
-    console.log(' QOS: ', qos);
-    console.log(' RESOURCES: ', resources);
-
-    if (!(cvq && pvq && cvr && pvr)) {
-        res.status(200).send({ status: 'notEnoughData' });
-    }
-
-    const latencyIncrease = (cvq.avgLatency - pvq.avgLatency) / pvq.avgLatency;
-    const errorPercentageIncrease = (cvq.errorPercentage - pvq.errorPercentage) / pvq.errorPercentage;
-    const ramIncrease = (cvr.ram - pvr.ram) / pvr.ram;
-    const cpuIncrease = (cvr.cpu - pvr.cpu) / pvr.cpu;
-    const netIOIncrease = (cvr.netIO - pvr.netIO) / pvr.netIO;
-
-    const currResourcesCount = cvr.count;
-    const prevResourcesCount = pvr.count;
-    const currReportsCount = cvq.count;
-    const prevReportsCount = pvq.count;
-
-    const report = { latencyIncrease, errorPercentageIncrease, ramIncrease, cpuIncrease, netIOIncrease };
-
-    if (
-        currResourcesCount < minResourcesReports ||
-        prevResourcesCount < minResourcesReports ||
-        currReportsCount < minReports ||
-        prevReportsCount < minReports
-    ) {
-        res.status(200).send({ ...report, status: 'notEnoughData' });
-    }
-
-    if (
-        latencyIncrease > config.maxLatencyIncrease ||
-        errorPercentageIncrease > config.maxErrorRateIncrease ||
-        ramIncrease > config.maxRamIncrease ||
-        cpuIncrease > config.maxCPUIncrease ||
-        netIOIncrease > config.maxNetIOIncrease
-    ) {
-        res.status(200).send({ ...report, status: 'rollback' });
-    }
-
-    res.status(200).send({ ...report, status: 'ok' });
-});
-
-app.get('/reports', async (req, res) => {
-    res.send(await db.getDocuments(db.reportCollection));
-});
+            },
+            {
+                $addFields: { version: { $min: '$_id' } },
+            },
+        ])
+        .toArray();
+};
 
 app.get('/healthcheck', (req, res) => {
     res.status(200).end();
 });
+
+const globalReport = async () => {
+    try {
+        const globalMonitorHost = process.env.GLOBAL_MONITOR_HOST;
+
+        let [qos, resources] = await Promise.all([aggregateQOS(), aggregateResources()]);
+        qos = qos.map((qos) => {
+            delete qos._id;
+            return qos;
+        });
+        resources = resources.map((resources) => {
+            delete resources._id;
+            return resources;
+        });
+
+        const globalMonitorResponse = await axios.post(
+            `http://${globalMonitorHost}:8000/reports`,
+            { qos, resources },
+            { headers: { apiKey } },
+        );
+
+        const qosCollection = await db.getCollection(db.reportCollection);
+        await qosCollection.remove();
+        const reportCollection = await db.getCollection(db.resourcesCollection);
+        await reportCollection.remove();
+    } catch (e) {
+        console.log('Global report error: ', e);
+    }
+};
+
+setInterval(globalReport, 5000);
 
 app.listen(port, () => console.log(`Example app listening on port ${port}!`));

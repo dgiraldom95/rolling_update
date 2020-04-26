@@ -1,8 +1,8 @@
-MongoClient = require('mongodb').MongoClient;
+const MongoClient = require('mongodb').MongoClient;
 
-const mongoHost = 'localhost'
+const mongoHost = 'localhost';
 // Connection URL
-const url = `mongodb://${mongoHost}:27017`;
+const url = `mongodb://${mongoHost}:27018`;
 
 // Database Name
 const dbName = 'monitoring';
@@ -10,9 +10,9 @@ const dbName = 'monitoring';
 // Create a new MongoClient
 const client = new MongoClient(url);
 
-const reportCollection = 'report';
-const versionCollection = 'version';
+const qosCollection = 'qos';
 const resourcesCollection = 'resources';
+const versionCollection = 'version';
 
 const getDB = async () => {
     await new Promise((resolve, reject) => {
@@ -26,7 +26,7 @@ const insertDocument = async (collection, document) => {
     const db = await getDB();
     const collectionInsert = db.collection(collection);
     return new Promise((resolve, reject) => {
-        collectionInsert.insertOne(document, function(err, result) {
+        collectionInsert.insertOne(document, function (err, result) {
             resolve(result);
         });
     });
@@ -49,13 +49,13 @@ const getDocuments = async (collection, filters = {}) => {
     const db = await getDB();
     const collectionGet = db.collection(collection);
     return new Promise((resolve, reject) => {
-        collectionGet.find({}).toArray(function(err, docs) {
+        collectionGet.find({}).toArray(function (err, docs) {
             resolve(docs);
         });
     });
 };
 
-const getCollection = async collection => {
+const getCollection = async (collection) => {
     const db = await getDB();
     return db.collection(collection);
 };
@@ -63,9 +63,9 @@ const getCollection = async collection => {
 module.exports = {
     getDocuments,
     insertDocument,
-    reportCollection,
+    qosCollection,
+    resourcesCollection,
     versionCollection,
     getCollection,
-    resourcesCollection,
     insertDocuments,
 };

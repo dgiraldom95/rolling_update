@@ -1,11 +1,12 @@
-const http = require('http');
-const readline = require('readline');
 const execCommand = require('child_process').exec;
+const axios = require('axios');
+const fs = require('fs');
 
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-});
+let version;
+let prevVersion;
+let imageName;
+const globalMonitorUrl = 'http://localhost:8000';
+const apiKey = fs.readFileSync('./apiKey.txt').toString();
 
 const appServiceName = 'iot_app';
 const monitorServiceName = 'iot_monitor';
@@ -13,14 +14,9 @@ const resourceServiceName = 'iot_resources';
 const mongoServiceName = 'iot_mongo';
 const thingServiceName = 'iot_thing';
 
-let latestAppVersion = 2;
-
-const workingImage = '1';
-const failingImage = '2';
-
-const exec = async command => {
+const exec = async (command) => {
     return new Promise((resolve, reject) => {
-        execCommand(command, function(error, stdout, stderr) {
+        execCommand(command, function (error, stdout, stderr) {
             if (stderr) {
                 console.log('COMMAND ERR: ', stderr);
                 reject(stderr);
@@ -30,12 +26,7 @@ const exec = async command => {
     });
 };
 
-const leaveSwarm = async () => {
-    let r = await exec('docker swarm leave -f');
-    console.log('LEAVE SWARM: ', r);
-};
-
-const joinSwarm = async () => {
+const createSwarm = async () => {
     let r = await exec('docker swarm init');
     console.log('JOIN SWARM: ', r);
 };
@@ -50,8 +41,8 @@ const createAppService = async () => {
     --update-failure-action "rollback" \
     --publish 3000:3000 \
     --network iot_overlay \
-    --env APP_VERSION=${workingImage} \
-    dgiraldom/iot_edge:${workingImage}`);
+    --env APP_VERSION=${version} \
+    ${imageName}:${version}`);
     console.log('CREATE APP SERVICE: ', r);
 };
 
@@ -73,6 +64,7 @@ const createMonitorService = async () => {
     --replicas 1 \
     --publish 3001:3001 \
     --network iot_overlay \
+    --env apiKey=${apiKey} \
     dgiraldom/monitor`);
 
     console.log('CREATE MONITOR SERVICE: ', r);
@@ -106,8 +98,8 @@ const updateService = async () => {
     let r = await exec(`docker service update \
     --detach \
     --update-failure-action "rollback" \
-    --image dgiraldom/iot_edge:${failingImage} \
-    --env-add APP_VERSION=${failingImage} \
+    --image dgiraldom/iot_edge:${version} \
+    --env-add APP_VERSION=${version} \
     ${appServiceName}`);
     console.log('SERVICE UPDATE: ', r);
 };
@@ -134,71 +126,53 @@ const sendRollbackRequest = async () => {
     console.log('SERVICE ROLLBACK: ', r);
 };
 
-const checkRollbackStatus = async (id, version) => {
-    options = {
-        host: 'localhost',
-        port: 3001,
-        path: `/health-report/2`,
-        method: 'GET',
-    };
-
-    const req = http.request(options, res => {
-        res.setEncoding('utf8');
-        res.on('data', d => {
-            const result = JSON.parse(d);
-            console.warn('VERSION STATUS: ', result.status);
-            console.log(result);
-            if (result.status === 'rollback') {
-                console.error('PERFORMING ROLLBACK');
-                sendRollbackRequest(id, version);
+const checkRollbackStatus = async () => {
+    try {
+        if (prevVersion && prevVersion !== version) {
+            const healthCheckResponse = await axios.get(`${globalMonitorUrl}/health-report/${version}`, {
+                headers: apiKey,
+            });
+            const data = healthCheckResponse.data;
+            console.log('VERSION STATUS: ', data);
+            if (data.status === 'rollback') {
+                console.log('PERFORMING ROLLBACK');
+                await sendRollbackRequest();
+                version = prevVersion;
             }
-        });
-    });
-    req.end();
-    // sendRollbackRequest(id, version);
-};
-
-const main = async () => {
-    while (true) {
-        const op = await new Promise((resolve, reject) => {
-            rl.question(
-                `1. Leave swarm
-2. Create swarm
-3. Stack deploy
-4. Update app
-5. Rollback
-6. Query monitor\n :
-`,
-                async answer => {
-                    resolve(Number(answer));
-                },
-            );
-        });
-
-        try {
-            let id, version;
-            switch (op) {
-                case 1:
-                    leaveSwarm();
-                    break;
-                case 2:
-                    await joinSwarm();
-                    break;
-                case 3:
-                    await stackDeploy();
-                    break;
-                case 4:
-                    latestAppVersion += 1;
-                    await updateService();
-                    break;
-                case 5:
-                    await checkRollbackStatus(id, version);
-                    break;
-            }
-        } catch (e) {
-            console.log('ERROR', e);
         }
+    } catch (e) {
+        console.log('Rollback check error: ', e);
     }
 };
 
-main();
+const checkForUpdates = async () => {
+    try {
+        const updateResponse = await axios.get(`${globalMonitorUrl}/version`);
+        const data = updateResponse.data;
+        if (data.version > version) {
+            prevVersion = version;
+            version = data.version;
+            console.log(`Updating to newest version ${data.version}`);
+            await updateService();
+        } else console.log('Already on newest version');
+    } catch (e) {
+        console.log('Update check error: ', e);
+    }
+};
+
+const init = async () => {
+    const initInfo = await axios.get(`${globalMonitorUrl}/init`);
+    const data = initInfo.data;
+    ({ imageName, version } = data);
+    try {
+        await createSwarm();
+    } catch (e) {
+        console.log('Already part of swarm - skipping init');
+        return;
+    }
+    await stackDeploy();
+};
+
+init();
+setInterval(checkRollbackStatus, 10000);
+setInterval(checkForUpdates, 10000);
