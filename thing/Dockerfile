@@ -5,6 +5,7 @@ WORKDIR /usr/src/app
 COPY . .
 
 RUN npm install
+RUN apk add curl
 
 ENV APP_HOST iot_app
 

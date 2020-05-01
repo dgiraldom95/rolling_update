@@ -9,17 +9,18 @@ app.use(bodyParser.json());
 
 const apiKey = process.env.apiKey;
 
-
-const port = 3011;
+const port = 3001;
 
 app.get('/', (req, res) => res.send('Hello World!'));
 
 app.post('/reports', async (req, res) => {
+    console.log('RECEIVED QOS: ', req.body);
     const newReport = await db.insertDocument(db.reportCollection, req.body);
     res.send(newReport);
 });
 
 app.post('/resources', async (req, res) => {
+    console.log('RECEIVED RESOURCES: ', req.body);
     const newResources = await db.insertDocuments(db.resourcesCollection, req.body);
     res.send(newResources);
 });
@@ -83,8 +84,10 @@ const globalReport = async () => {
             return resources;
         });
 
+        console.log(`AGGREGATING: qos: ${qos} | resoures: ${resources}`);
+
         const globalMonitorResponse = await axios.post(
-            `http://${globalMonitorHost}:8000/reports`,
+            `${globalMonitorHost}:8000/reports`,
             { qos, resources },
             { headers: { apiKey } },
         );

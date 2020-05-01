@@ -5,7 +5,7 @@ const fs = require('fs');
 let version;
 let prevVersion;
 let imageName;
-const globalMonitorUrl = 'http://localhost:8000';
+const globalMonitorHost = 'http://157.230.14.37';
 const apiKey = fs.readFileSync('./apiKey.txt').toString();
 
 const appServiceName = 'iot_app';
@@ -35,7 +35,7 @@ const createAppService = async () => {
     let r = await exec(`docker service create \
     --detach \
     --name ${appServiceName} \
-    --replicas 5 \
+    --replicas 3 \
     --update-delay 1s \
     --rollback-delay 1s \
     --update-failure-action "rollback" \
@@ -65,6 +65,7 @@ const createMonitorService = async () => {
     --publish 3001:3001 \
     --network iot_overlay \
     --env apiKey=${apiKey} \
+    --env GLOBAL_MONITOR_HOST=${globalMonitorHost} \
     dgiraldom/monitor`);
 
     console.log('CREATE MONITOR SERVICE: ', r);
@@ -98,14 +99,14 @@ const updateService = async () => {
     let r = await exec(`docker service update \
     --detach \
     --update-failure-action "rollback" \
-    --image dgiraldom/iot_edge:${version} \
+    --image dgiraldom/${imageName}:${version} \
     --env-add APP_VERSION=${version} \
     ${appServiceName}`);
     console.log('SERVICE UPDATE: ', r);
 };
 
 const createOverlayNetwork = async () => {
-    let r = await exec(`docker network create --driver overlay iot_overlay`);
+    let r = await exec(`docker network create --driver overlay --attachable iot_overlay`);
     console.log('OVERLAY NETWORK: ', r);
 };
 
@@ -129,8 +130,8 @@ const sendRollbackRequest = async () => {
 const checkRollbackStatus = async () => {
     try {
         if (prevVersion && prevVersion !== version) {
-            const healthCheckResponse = await axios.get(`${globalMonitorUrl}/health-report/${version}`, {
-                headers: apiKey,
+            const healthCheckResponse = await axios.get(`${globalMonitorHost}:8000/health-report/${version}`, {
+                headers: { apiKey },
             });
             const data = healthCheckResponse.data;
             console.log('VERSION STATUS: ', data);
@@ -147,7 +148,7 @@ const checkRollbackStatus = async () => {
 
 const checkForUpdates = async () => {
     try {
-        const updateResponse = await axios.get(`${globalMonitorUrl}/version`);
+        const updateResponse = await axios.get(`${globalMonitorHost}:8000/version`);
         const data = updateResponse.data;
         if (data.version > version) {
             prevVersion = version;
@@ -161,9 +162,10 @@ const checkForUpdates = async () => {
 };
 
 const init = async () => {
-    const initInfo = await axios.get(`${globalMonitorUrl}/init`);
+    const initInfo = await axios.get(`${globalMonitorHost}:8000/init`);
     const data = initInfo.data;
     ({ imageName, version } = data);
+    console.log(`Image Name is ${imageName} and current version is ${version}`);
     try {
         await createSwarm();
     } catch (e) {

@@ -1,17 +1,18 @@
 const express = require('express');
 const exec = require('child_process').exec;
 const axios = require('axios');
+const process = require('process');
 
 const app = express();
 const port = 3002;
-const monitorHost = process.env.MONITOR_HOST;
+const monitorHost = process.env.MONITOR_HOST || 'iot_monitor';
 
 app.get('/healthcheck', (req, res) => {
     res.status(200).end();
 });
 
 function execute(command, callback) {
-    exec(command, function(error, stdout, stderr) {
+    exec(command, function (error, stdout, stderr) {
         if (stderr) {
             console.log('COMMAND ERR: ', stderr);
         }
@@ -26,13 +27,13 @@ const reportResources = async () => {
         return new Promise((resolve, reject) => {
             execute(
                 `docker stats --no-stream --format "{{.Name}},{{.Container}},{{.CPUPerc}},{{.MemUsage}},{{.NetIO}}\n"`,
-                out => {
-                    data = out.split('\n');
+                (out) => {
+                    const data = out.split('\n');
                     const regex = '[0-9.]+';
                     const report = data
-                        .filter(d => d.length > 0)
-                        .map(d => {
-                            fields = d.split(',');
+                        .filter((d) => d.length > 0)
+                        .map((d) => {
+                            const fields = d.split(',');
 
                             return {
                                 name: fields[0],
@@ -52,12 +53,12 @@ const reportResources = async () => {
 
     const getImages = async () => {
         return new Promise((resolve, reject) => {
-            execute(`docker container ls --format='{{.ID}}, {{.Image}}\n'`, out => {
+            execute(`docker container ls --format='{{.ID}}, {{.Image}}\n'`, (out) => {
                 const data = out.split('\n');
                 const report = data
-                    .filter(d => d.length > 0)
-                    .map(d => {
-                        fields = d.split(',');
+                    .filter((d) => d.length > 0)
+                    .map((d) => {
+                        const fields = d.split(',');
                         return { container: fields[0], image: fields[1] };
                     });
                 resolve(report);
@@ -66,8 +67,8 @@ const reportResources = async () => {
     };
     let [resources, images] = await Promise.all([getResources(), getImages()]);
 
-    resources = resources.map(r => {
-        const image = images.find(i => i.container === r.container).image;
+    resources = resources.map((r) => {
+        const image = images.find((i) => i.container === r.container).image;
         const version = image.split(':')[1];
         return { ...r, image, version };
     });

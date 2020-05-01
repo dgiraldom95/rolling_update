@@ -27,7 +27,7 @@ const middleware = async (req, res, callback) => {
     }
 };
 
-const fib = n => {
+const fib = (n) => {
     if (n === 1 || n === 0) {
         return 1;
     } else {
@@ -35,17 +35,28 @@ const fib = n => {
     }
 };
 
-app.get('/', async (req, res) => {
+let temperatureArray = [];
+app.post('/reports', async (req, res) => {
     await middleware(req, res, () => {
+        const { temperature } = req.body;
+        temperatureArray.push(temperature);
+        if (temperatureArray.length >= 10) {
+            const count = temperatureArray.length;
+
+            const avg = temperatureArray.reduce((sum, curr) => (sum += curr), 0) / count;
+            console.log('AVG: ', avg);
+            temperatureArray = [];
+        }
+
         const rand = Math.random();
         const randFailThreshold = APP_VERSION < 2 ? 0.95 : 0.8;
 
         const result = fib(20 * APP_VERSION);
 
         if (rand > randFailThreshold) {
-            res.status(500);
+            res.status(500).end();
         } else {
-            res.status(200);
+            res.status(200).end();
         }
     });
 });

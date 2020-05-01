@@ -1,6 +1,6 @@
 FROM node:10-alpine
 
-RUN apk add --update docker openrc
+RUN apk add --update docker openrc curl
 RUN rc-update add docker boot
 
 WORKDIR /usr/src/app
