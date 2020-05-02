@@ -49,7 +49,11 @@ app.post('/reports', async (req, res) => {
             console.log('AVG: ', avg);
             temperatureArray = [];
 
-            await axios.post(`${cloudUrl}/temperature`, { count, avg });
+            try {
+                await axios.post(`${cloudUrl}/measurements`, { count, avg });
+            } catch (e) {
+                console.log(e);
+            }
         }
 
         const rand = Math.random();

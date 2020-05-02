@@ -176,7 +176,7 @@ app.get('/healthcheck', (req, res) => {
     res.status(200).end();
 });
 
-app.post('/temperature', async (req, res) => {
+app.post('/measurements', async (req, res) => {
     console.log(req.body);
     const { count, avg } = req.body;
     await db.insertDocument(db.temperatureCollection, {
