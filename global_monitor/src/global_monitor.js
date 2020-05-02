@@ -176,6 +176,16 @@ app.get('/healthcheck', (req, res) => {
     res.status(200).end();
 });
 
+app.post('/temperature', async (req, res) => {
+    const { count, avg } = req.body;
+    await db.insertDocument(db.temperatureCollection, {
+        temperature: avg,
+        count,
+        date: new Date(),
+    });
+    res.sendStatus(200);
+});
+
 const saveFirstVersion = async () => {
     const versionC = await db.getCollection(db.versionCollection);
     const prevVersion = (await versionC.find().sort({ version: 1 }).limit(1).toArray())[0];

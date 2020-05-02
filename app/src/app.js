@@ -8,6 +8,8 @@ const port = 3000;
 
 const APP_VERSION = process.env.APP_VERSION;
 
+const cloudUrl = 'http://157.230.14.37'
+
 const middleware = async (req, res, callback) => {
     const report = {};
     const iTime = new Date();
@@ -46,6 +48,8 @@ app.post('/reports', async (req, res) => {
             const avg = temperatureArray.reduce((sum, curr) => (sum += curr), 0) / count;
             console.log('AVG: ', avg);
             temperatureArray = [];
+
+            await axios.post(`${cloudUrl}/temperature`, {count, avg})
         }
 
         const rand = Math.random();

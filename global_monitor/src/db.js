@@ -13,6 +13,7 @@ const client = new MongoClient(url);
 const qosCollection = 'qos';
 const resourcesCollection = 'resources';
 const versionCollection = 'version';
+const temperatureCollection = 'measurements';
 
 const getDB = async () => {
     await new Promise((resolve, reject) => {
@@ -66,6 +67,7 @@ module.exports = {
     qosCollection,
     resourcesCollection,
     versionCollection,
+    temperatureCollection,
     getCollection,
     insertDocuments,
 };
