@@ -17,9 +17,9 @@ const sendData = async () => {
         const r = await axios.post(`${appHost}:3000/reports`, { temperature });
         console.log('R: ', r);
     } catch (err) {
-        console.log(err);
+        console.log(err.message);
     }
 };
 
-setInterval(sendData, 100);
+setInterval(sendData, 300);
 app.listen(port, () => console.log(`Example app listening on port ${port}!`));

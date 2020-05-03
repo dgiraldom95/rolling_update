@@ -99,7 +99,7 @@ const updateService = async () => {
     let r = await exec(`docker service update \
     --detach \
     --update-failure-action "rollback" \
-    --image dgiraldom/${imageName}:${version} \
+    --image ${imageName}:${version} \
     --env-add APP_VERSION=${version} \
     ${appServiceName}`);
     console.log('SERVICE UPDATE: ', r);
