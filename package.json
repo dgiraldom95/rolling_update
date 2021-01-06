@@ -4,7 +4,7 @@
     "start:local": "export MONITOR_HOST=localhost && node src/resources.js"
   },
   "dependencies": {
-    "axios": "^0.19.2"
+    "axios": "^0.21.1"
   },
   "devDependencies": {
     "eslint": "^6.8.0"
